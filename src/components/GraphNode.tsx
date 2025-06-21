@@ -1,4 +1,4 @@
-import type { NodeProps } from 'reactflow'
+import { Handle, Position, type NodeProps } from 'reactflow'
 
 interface Data {
   label: string
@@ -10,13 +10,14 @@ export default function GraphNode({ data }: NodeProps<Data>) {
   return (
     <div
       className={
-        'px-2 py-1 rounded shadow text-xs ' +
-        (data.type === 'band' ? 'bg-blue-200' : 'bg-green-200') +
-        ' cursor-pointer'
+        'px-3 py-2 rounded border shadow text-xs text-white ' +
+        (data.type === 'artist' ? 'bg-blue-600' : 'bg-red-600')
       }
       title={data.tooltip}
     >
+      <Handle type="target" position={Position.Top} />
       {data.label}
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 }
