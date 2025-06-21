@@ -6,13 +6,16 @@ import ReactFlow, {
   type Node,
   type Edge,
   useReactFlow,
+  MarkerType,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import SearchBar from './components/SearchBar'
 import GraphNode from './components/GraphNode'
+import CustomEdge from './components/CustomEdge'
 import { fetchJson } from './utils/dataFetcher'
 
 const nodeTypes = { graphNode: GraphNode }
+const edgeTypes = { custom: CustomEdge }
 
 function App() {
   const [nodes, setNodes] = useState<Node[]>([])
@@ -62,7 +65,14 @@ function App() {
         if (es.find((e) => e.source === source && e.target === target)) return es
         return [
           ...es,
-          { id: `e-${source}-${target}`, source, target, label, type: 'smoothstep' },
+          {
+            id: `e-${source}-${target}`,
+            source,
+            target,
+            label,
+            type: label ? 'custom' : 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#555' },
+          },
         ]
       })
     },
@@ -161,6 +171,7 @@ function App() {
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
         >
           <MiniMap />
           <Controls />
