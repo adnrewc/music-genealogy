@@ -11,7 +11,8 @@ export default function GraphNode({ data }: NodeProps<Data>) {
     <div
       className={
         'px-2 py-1 rounded shadow text-xs ' +
-        (data.type === 'band' ? 'bg-blue-200' : 'bg-green-200')
+        (data.type === 'band' ? 'bg-blue-200' : 'bg-green-200') +
+        ' cursor-pointer'
       }
       title={data.tooltip}
     >
