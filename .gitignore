@@ -33,3 +33,5 @@ coverage/
 
 # === React Flow dev artifacts ===
 .reactflow/
+.DS_Store
+.DS_Store
