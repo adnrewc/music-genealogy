@@ -3,10 +3,11 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  ReactFlowProvider,
+  MarkerType,
   type Node,
   type Edge,
   useReactFlow,
-  MarkerType,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import SearchBar from './components/SearchBar'
@@ -17,7 +18,7 @@ import { fetchJson } from './utils/dataFetcher'
 const nodeTypes = { graphNode: GraphNode }
 const edgeTypes = { custom: CustomEdge }
 
-function App() {
+function FlowApp() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [selected, setSelected] = useState<Node | null>(null)
@@ -36,23 +37,29 @@ function App() {
     ) => {
       setNodes((ns) => {
         if (ns.find((n) => n.id === id)) return ns
+
         let position = { x: Math.random() * 800, y: Math.random() * 600 }
+
         if (parent) {
           const parentNode = ns.find((n) => n.id === parent)
           if (parentNode) {
             const count = childCount.current.get(parent) || 0
             childCount.current.set(parent, count + 1)
             position = {
-              x:
-                parentNode.position.x +
-                (type === 'band' ? 200 : -200),
+              x: parentNode.position.x + (type === 'band' ? 200 : -200),
               y: parentNode.position.y + count * 80,
             }
           }
         }
+
         return [
           ...ns,
-          { id, data: { label, type, tooltip }, position, type: 'graphNode' },
+          {
+            id,
+            data: { label, type, tooltip },
+            position,
+            type: 'graphNode',
+          },
         ]
       })
     },
@@ -97,6 +104,7 @@ function App() {
     async (mbid: string) => {
       if (loaded.current.has(mbid)) return
       loaded.current.add(mbid)
+
       try {
         interface ArtistData {
           id: string
@@ -109,10 +117,16 @@ function App() {
         const data = await fetchJson<ArtistData>(
           `https://musicbrainz.org/ws/2/artist/${mbid}?inc=artist-rels&fmt=json`
         )
+
         const type = data.type === 'Group' ? 'band' : 'artist'
         const life = data['life-span']
-        const years = life && (life.begin || life.end) ? `${life.begin || ''} - ${life.end || ''}` : ''
+        const years =
+          life && (life.begin || life.end)
+            ? `${life.begin || ''} - ${life.end || ''}`
+            : ''
+
         addNode(data.id, data.name, type, years)
+
         for (const rel of data.relations || []) {
           if (rel.type === 'member of band' && rel.artist) {
             addNode(rel.artist.id, rel.artist.name, 'band', parseTooltip(rel), data.id)
@@ -139,20 +153,23 @@ function App() {
   )
 
   const handleNodeDoubleClick = useCallback<import('reactflow').NodeMouseHandler>(
-    (_evt, node) => {
+    (_event, node) => {
       setCenter(node.position.x, node.position.y, { zoom: 1, duration: 800 })
     },
     [setCenter]
   )
 
-  const handleSearchSelect = useCallback((artist: { id: string; name: string }) => {
-    setNodes([])
-    setEdges([])
-    loaded.current.clear()
-    childCount.current.clear()
-    searchMode.current = true
-    loadArtist(artist.id)
-  }, [loadArtist])
+  const handleSearchSelect = useCallback(
+    (artist: { id: string; name: string }) => {
+      setNodes([])
+      setEdges([])
+      loaded.current.clear()
+      childCount.current.clear()
+      searchMode.current = true
+      loadArtist(artist.id)
+    },
+    [loadArtist]
+  )
 
   useEffect(() => {
     if (searchMode.current && nodes.length > 0) {
@@ -172,6 +189,7 @@ function App() {
           onNodeDoubleClick={handleNodeDoubleClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          fitView
         >
           <MiniMap />
           <Controls />
@@ -197,4 +215,10 @@ function App() {
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <FlowApp />
+    </ReactFlowProvider>
+  )
+}
