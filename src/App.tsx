@@ -1,5 +1,12 @@
-import { useCallback, useRef, useState } from 'react'
-import ReactFlow, { Background, Controls, MiniMap, type Node, type Edge } from 'reactflow'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import ReactFlow, {
+  Background,
+  Controls,
+  MiniMap,
+  type Node,
+  type Edge,
+  useReactFlow,
+} from 'reactflow'
 import 'reactflow/dist/style.css'
 import SearchBar from './components/SearchBar'
 import GraphNode from './components/GraphNode'
@@ -10,22 +17,57 @@ const nodeTypes = { graphNode: GraphNode }
 function App() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
+  const [selected, setSelected] = useState<Node | null>(null)
   const loaded = useRef(new Set<string>())
+  const childCount = useRef(new Map<string, number>())
+  const searchMode = useRef(false)
+  const { fitView, setCenter } = useReactFlow()
 
-  const addNode = useCallback((id: string, label: string, type: 'artist' | 'band', tooltip?: string) => {
-    setNodes((ns) => {
-      if (ns.find((n) => n.id === id)) return ns
-      const position = { x: Math.random() * 800, y: Math.random() * 600 }
-      return [...ns, { id, data: { label, type, tooltip }, position, type: 'graphNode' }]
-    })
-  }, [])
+  const addNode = useCallback(
+    (
+      id: string,
+      label: string,
+      type: 'artist' | 'band',
+      tooltip?: string,
+      parent?: string
+    ) => {
+      setNodes((ns) => {
+        if (ns.find((n) => n.id === id)) return ns
+        let position = { x: Math.random() * 800, y: Math.random() * 600 }
+        if (parent) {
+          const parentNode = ns.find((n) => n.id === parent)
+          if (parentNode) {
+            const count = childCount.current.get(parent) || 0
+            childCount.current.set(parent, count + 1)
+            position = {
+              x:
+                parentNode.position.x +
+                (type === 'band' ? 200 : -200),
+              y: parentNode.position.y + count * 80,
+            }
+          }
+        }
+        return [
+          ...ns,
+          { id, data: { label, type, tooltip }, position, type: 'graphNode' },
+        ]
+      })
+    },
+    []
+  )
 
-  const addEdge = useCallback((source: string, target: string) => {
-    setEdges((es) => {
-      if (es.find((e) => e.source === source && e.target === target)) return es
-      return [...es, { id: `e-${source}-${target}`, source, target }]
-    })
-  }, [])
+  const addEdge = useCallback(
+    (source: string, target: string, label?: string) => {
+      setEdges((es) => {
+        if (es.find((e) => e.source === source && e.target === target)) return es
+        return [
+          ...es,
+          { id: `e-${source}-${target}`, source, target, label, type: 'smoothstep' },
+        ]
+      })
+    },
+    []
+  )
 
   interface Relation {
     type: string
@@ -63,12 +105,12 @@ function App() {
         addNode(data.id, data.name, type, years)
         for (const rel of data.relations || []) {
           if (rel.type === 'member of band' && rel.artist) {
-            addNode(rel.artist.id, rel.artist.name, 'band', parseTooltip(rel))
-            addEdge(data.id, rel.artist.id)
+            addNode(rel.artist.id, rel.artist.name, 'band', parseTooltip(rel), data.id)
+            addEdge(data.id, rel.artist.id, 'member of')
           }
           if (rel.type === 'has member' && rel.artist) {
-            addNode(rel.artist.id, rel.artist.name, 'artist', parseTooltip(rel))
-            addEdge(data.id, rel.artist.id)
+            addNode(rel.artist.id, rel.artist.name, 'artist', parseTooltip(rel), data.id)
+            addEdge(data.id, rel.artist.id, 'has member')
           }
         }
       } catch (err) {
@@ -80,21 +122,66 @@ function App() {
 
   const handleNodeClick = useCallback<import('reactflow').NodeMouseHandler>(
     (_event, node) => {
+      setSelected(node)
       loadArtist(node.id)
     },
     [loadArtist]
   )
 
+  const handleNodeDoubleClick = useCallback<import('reactflow').NodeMouseHandler>(
+    (_evt, node) => {
+      setCenter(node.position.x, node.position.y, { zoom: 1, duration: 800 })
+    },
+    [setCenter]
+  )
+
+  const handleSearchSelect = useCallback((artist: { id: string; name: string }) => {
+    setNodes([])
+    setEdges([])
+    loaded.current.clear()
+    childCount.current.clear()
+    searchMode.current = true
+    loadArtist(artist.id)
+  }, [loadArtist])
+
+  useEffect(() => {
+    if (searchMode.current && nodes.length > 0) {
+      fitView({ duration: 800 })
+      searchMode.current = false
+    }
+  }, [nodes, fitView])
+
   return (
-    <div className="w-screen h-screen">
-      <SearchBar onSelect={(a) => loadArtist(a.id)} />
+    <div className="w-screen h-screen relative">
+      <SearchBar onSelect={handleSearchSelect} />
       <div style={{ width: '100%', height: 'calc(100% - 50px)' }}>
-        <ReactFlow nodes={nodes} edges={edges} onNodeClick={handleNodeClick} nodeTypes={nodeTypes} fitView>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodeClick={handleNodeClick}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          nodeTypes={nodeTypes}
+        >
           <MiniMap />
           <Controls />
           <Background />
         </ReactFlow>
       </div>
+      {selected && (
+        <div className="absolute right-2 top-14 bg-white border p-2 text-sm shadow">
+          <div className="font-bold">{selected.data.label}</div>
+          <div className="mb-1">Type: {selected.data.type}</div>
+          {selected.data.tooltip && <div className="mb-1">{selected.data.tooltip}</div>}
+          <a
+            href={`https://musicbrainz.org/${selected.data.type}/${selected.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-500 underline"
+          >
+            View on MusicBrainz
+          </a>
+        </div>
+      )}
     </div>
   )
 }
