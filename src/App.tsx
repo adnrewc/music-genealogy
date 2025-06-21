@@ -67,7 +67,12 @@ function FlowApp() {
   )
 
   const addEdge = useCallback(
-    (source: string, target: string, label?: string) => {
+    (
+      source: string,
+      target: string,
+      label?: string,
+      data?: { type?: string; direction?: string }
+    ) => {
       setEdges((es) => {
         if (es.find((e) => e.source === source && e.target === target)) return es
         return [
@@ -79,6 +84,7 @@ function FlowApp() {
             label,
             type: label ? 'custom' : 'smoothstep',
             markerEnd: { type: MarkerType.ArrowClosed, color: '#555' },
+            data,
           },
         ]
       })
@@ -88,7 +94,8 @@ function FlowApp() {
 
   interface Relation {
     type: string
-    artist?: { id: string; name: string }
+    direction?: 'forward' | 'backward'
+    artist?: { id: string; name: string; type?: string }
     attributes?: string[]
     begin?: string
     end?: string
@@ -128,14 +135,23 @@ function FlowApp() {
         addNode(data.id, data.name, type, years)
 
         for (const rel of data.relations || []) {
-          if (rel.type === 'member of band' && rel.artist) {
-            addNode(rel.artist.id, rel.artist.name, 'band', parseTooltip(rel), data.id)
-            addEdge(data.id, rel.artist.id, 'member of')
+          if (!rel.artist) continue
+          if (rel.type !== 'member of band' && rel.type !== 'collaboration') continue
+
+          const relatedType = rel.artist.type === 'Group' ? 'band' : 'artist'
+          addNode(rel.artist.id, rel.artist.name, relatedType, parseTooltip(rel), data.id)
+
+          const source = rel.direction === 'forward' ? data.id : rel.artist.id
+          const target = rel.direction === 'forward' ? rel.artist.id : data.id
+
+          let label: string | undefined
+          if (rel.type === 'collaboration') {
+            label = 'collaborated on'
+          } else {
+            label = rel.direction === 'forward' ? 'is member of' : 'includes member'
           }
-          if (rel.type === 'has member' && rel.artist) {
-            addNode(rel.artist.id, rel.artist.name, 'artist', parseTooltip(rel), data.id)
-            addEdge(data.id, rel.artist.id, 'has member')
-          }
+
+          addEdge(source, target, label, { type: rel.type, direction: rel.direction })
         }
       } catch (err) {
         console.error(err)
