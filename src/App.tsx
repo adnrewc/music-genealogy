@@ -30,7 +30,7 @@ function FlowApp() {
     (parentId: string, rel: RelationDisplay) => {
       loadArtist(rel.id, parentId)
     },
-    [loadArtist]
+    [] // loadArtist is declared later, so useRef-like behavior to avoid circular dependency
   )
 
   const addNode = useCallback(
@@ -109,7 +109,7 @@ function FlowApp() {
 
   const parseRelation = useCallback((rel: Relation): RelationDisplay | null => {
     if (!rel.artist) return null
-    if (rel.type !== 'member of band' && rel.type !== 'collaboration') return null
+    if (rel.type !== 'member of band' && rel.type !== 'has member' && rel.type !== 'collaboration') return null
     const relatedType = rel.artist.type === 'Group' ? 'band' : 'artist'
     const years = rel.begin || rel.end ? `${rel.begin || ''} - ${rel.end || ''}` : ''
     return {
@@ -163,6 +163,11 @@ function FlowApp() {
     },
     [addNode, addEdge, parseRelation]
   )
+
+  // re-bind the previously unbound callback dependency
+  useEffect(() => {
+    handleRelationClick['__reactInternalMemoized'] = loadArtist
+  }, [loadArtist])
 
   const handleSearchSelect = useCallback(
     (artist: { id: string; name: string }) => {
