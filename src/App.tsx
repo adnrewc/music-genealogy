@@ -13,6 +13,7 @@ import 'reactflow/dist/style.css'
 import SearchBar from './components/SearchBar'
 import GraphNode, { type RelationDisplay } from './components/GraphNode'
 import CustomEdge from './components/CustomEdge'
+import GenealogyExplorer from "./GenealogyExplorer"
 import { fetchJson } from './utils/dataFetcher'
 
 const nodeTypes = { graphNode: GraphNode }
@@ -227,9 +228,12 @@ function FlowApp() {
 }
 
 export default function App() {
-  return (
+  const useExperimentalLayout = true;
+  return useExperimentalLayout ? (
+    <GenealogyExplorer />
+  ) : (
     <ReactFlowProvider>
       <FlowApp />
     </ReactFlowProvider>
-  )
+  );
 }
