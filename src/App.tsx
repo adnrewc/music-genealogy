@@ -11,7 +11,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import SearchBar from './components/SearchBar'
-import GraphNode from './components/GraphNode'
+import GraphNode, { type RelationDisplay } from './components/GraphNode'
 import CustomEdge from './components/CustomEdge'
 import { fetchJson } from './utils/dataFetcher'
 
@@ -21,11 +21,17 @@ const edgeTypes = { custom: CustomEdge }
 function FlowApp() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
-  const [selected, setSelected] = useState<Node | null>(null)
   const loaded = useRef(new Set<string>())
   const childCount = useRef(new Map<string, number>())
   const searchMode = useRef(false)
-  const { fitView, setCenter } = useReactFlow()
+  const { fitView } = useReactFlow()
+
+  const handleRelationClick = useCallback(
+    (parentId: string, rel: RelationDisplay) => {
+      loadArtist(rel.id, parentId)
+    },
+    [loadArtist]
+  )
 
   const addNode = useCallback(
     (
@@ -33,10 +39,17 @@ function FlowApp() {
       label: string,
       type: 'artist' | 'band',
       tooltip?: string,
+      relations?: RelationDisplay[],
       parent?: string
     ) => {
       setNodes((ns) => {
-        if (ns.find((n) => n.id === id)) return ns
+        const existing = ns.find((n) => n.id === id)
+        if (existing) {
+          if (!existing.data.relations && relations) {
+            existing.data = { ...existing.data, relations }
+          }
+          return [...ns]
+        }
 
         let position = { x: Math.random() * 800, y: Math.random() * 600 }
 
@@ -46,8 +59,8 @@ function FlowApp() {
             const count = childCount.current.get(parent) || 0
             childCount.current.set(parent, count + 1)
             position = {
-              x: parentNode.position.x + (type === 'band' ? 200 : -200),
-              y: parentNode.position.y + count * 80,
+              x: parentNode.position.x + 260,
+              y: parentNode.position.y + count * 160,
             }
           }
         }
@@ -56,23 +69,18 @@ function FlowApp() {
           ...ns,
           {
             id,
-            data: { label, type, tooltip },
+            data: { id, label, type, tooltip, relations, onRelationClick: handleRelationClick },
             position,
             type: 'graphNode',
           },
         ]
       })
     },
-    []
+    [handleRelationClick]
   )
 
   const addEdge = useCallback(
-    (
-      source: string,
-      target: string,
-      label?: string,
-      data?: { type?: string; direction?: string }
-    ) => {
+    (source: string, target: string) => {
       setEdges((es) => {
         if (es.find((e) => e.source === source && e.target === target)) return es
         return [
@@ -81,10 +89,8 @@ function FlowApp() {
             id: `e-${source}-${target}`,
             source,
             target,
-            label,
-            type: label ? 'custom' : 'smoothstep',
+            type: 'smoothstep',
             markerEnd: { type: MarkerType.ArrowClosed, color: '#555' },
-            data,
           },
         ]
       })
@@ -101,15 +107,26 @@ function FlowApp() {
     end?: string
   }
 
-  const parseTooltip = useCallback((rel: Relation) => {
-    const role = (rel.attributes || []).join(', ')
+  const parseRelation = useCallback((rel: Relation): RelationDisplay | null => {
+    if (!rel.artist) return null
+    if (rel.type !== 'member of band' && rel.type !== 'collaboration') return null
+    const relatedType = rel.artist.type === 'Group' ? 'band' : 'artist'
     const years = rel.begin || rel.end ? `${rel.begin || ''} - ${rel.end || ''}` : ''
-    return [role, years].filter(Boolean).join(' ')
+    return {
+      id: rel.artist.id,
+      name: rel.artist.name,
+      type: relatedType,
+      role: rel.attributes?.join(', '),
+      years,
+    }
   }, [])
 
   const loadArtist = useCallback(
-    async (mbid: string) => {
-      if (loaded.current.has(mbid)) return
+    async (mbid: string, parent?: string) => {
+      if (loaded.current.has(mbid)) {
+        if (parent) addEdge(parent, mbid)
+        return
+      }
       loaded.current.add(mbid)
 
       try {
@@ -132,47 +149,19 @@ function FlowApp() {
             ? `${life.begin || ''} - ${life.end || ''}`
             : ''
 
-        addNode(data.id, data.name, type, years)
-
+        const rels: RelationDisplay[] = []
         for (const rel of data.relations || []) {
-          if (!rel.artist) continue
-          if (rel.type !== 'member of band' && rel.type !== 'collaboration') continue
-
-          const relatedType = rel.artist.type === 'Group' ? 'band' : 'artist'
-          addNode(rel.artist.id, rel.artist.name, relatedType, parseTooltip(rel), data.id)
-
-          const source = rel.direction === 'forward' ? data.id : rel.artist.id
-          const target = rel.direction === 'forward' ? rel.artist.id : data.id
-
-          let label: string | undefined
-          if (rel.type === 'collaboration') {
-            label = 'collaborated on'
-          } else {
-            label = rel.direction === 'forward' ? 'is member of' : 'includes member'
-          }
-
-          addEdge(source, target, label, { type: rel.type, direction: rel.direction })
+          const parsed = parseRelation(rel)
+          if (parsed) rels.push(parsed)
         }
+
+        addNode(data.id, data.name, type, years, rels, parent)
+        if (parent) addEdge(parent, data.id)
       } catch (err) {
         console.error(err)
       }
     },
-    [addEdge, addNode, parseTooltip]
-  )
-
-  const handleNodeClick = useCallback<import('reactflow').NodeMouseHandler>(
-    (_event, node) => {
-      setSelected(node)
-      loadArtist(node.id)
-    },
-    [loadArtist]
-  )
-
-  const handleNodeDoubleClick = useCallback<import('reactflow').NodeMouseHandler>(
-    (_event, node) => {
-      setCenter(node.position.x, node.position.y, { zoom: 1, duration: 800 })
-    },
-    [setCenter]
+    [addNode, addEdge, parseRelation]
   )
 
   const handleSearchSelect = useCallback(
@@ -198,35 +187,12 @@ function FlowApp() {
     <div className="w-screen h-screen relative">
       <SearchBar onSelect={handleSearchSelect} />
       <div style={{ width: '100%', height: 'calc(100% - 50px)' }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-        >
+        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView>
           <MiniMap />
           <Controls />
           <Background />
         </ReactFlow>
       </div>
-      {selected && (
-        <div className="absolute right-2 top-14 bg-white border p-2 text-sm shadow">
-          <div className="font-bold">{selected.data.label}</div>
-          <div className="mb-1">Type: {selected.data.type}</div>
-          {selected.data.tooltip && <div className="mb-1">{selected.data.tooltip}</div>}
-          <a
-            href={`https://musicbrainz.org/${selected.data.type}/${selected.id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-blue-500 underline"
-          >
-            View on MusicBrainz
-          </a>
-        </div>
-      )}
     </div>
   )
 }
