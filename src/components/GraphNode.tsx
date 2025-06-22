@@ -22,15 +22,51 @@ interface Data {
 
 function roleEmojis(roles?: string[]): string {
   if (!roles) return ''
-  const emojis = new Set<string>()
+
+  const set = new Set<string>()
   for (const role of roles) {
     const r = role.toLowerCase()
-    if (r.includes('guitar') || r.includes('bass')) emojis.add('🎸')
-    if (r.includes('drum')) emojis.add('🥁')
-    if (r.includes('vocal')) emojis.add('🎤')
-    if (r.includes('keyboard')) emojis.add('🎹')
+    let matched = false
+    if (r.includes('guitar') || r.includes('bass')) {
+      set.add('🎸')
+      matched = true
+    }
+    if (r.includes('vocal')) {
+      set.add('🎤')
+      matched = true
+    }
+    if (r.includes('drum')) {
+      set.add('🥁')
+      matched = true
+    }
+    if (r.includes('keyboard')) {
+      set.add('🎹')
+      matched = true
+    }
+    if (
+      r.includes('violin') ||
+      r.includes('cello') ||
+      r.includes('strings')
+    ) {
+      set.add('🎻')
+      matched = true
+    }
+    if (
+      r.includes('horn') ||
+      r.includes('trumpet') ||
+      r.includes('sax') ||
+      r.includes('trombone')
+    ) {
+      set.add('🎷')
+      matched = true
+    }
+    if (!matched) {
+      set.add('🍺')
+    }
   }
-  return Array.from(emojis).join(' ')
+
+  const order = ['🎸', '🎤', '🥁', '🎹', '🎻', '🎷', '🍺']
+  return order.filter((e) => set.has(e)).join(' ')
 }
 
 export default function GraphNode({ id, data }: NodeProps<Data>) {
@@ -60,11 +96,10 @@ export default function GraphNode({ id, data }: NodeProps<Data>) {
     return result
   }, [data.relations])
 
-  const containerHeight = Math.min(relations.length * 32, 300)
-
   return (
     <div
-      className="relative bg-white rounded-xl shadow-md text-xs text-black w-64 animate-fade-in"
+      id={id}
+      className="relative w-64 text-xs text-black bg-white rounded-xl shadow-md p-4 max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 animate-fade-in"
       title={data.tooltip}
     >
       <button
@@ -74,20 +109,28 @@ export default function GraphNode({ id, data }: NodeProps<Data>) {
         ×
       </button>
       <Handle type="target" position={Position.Left} />
-      <div className="font-bold bg-gray-100 px-2 py-1 text-sm">{data.label}</div>
-      <div
-        className="overflow-y-auto p-3 flex flex-col gap-y-1"
-        style={{ height: containerHeight, maxHeight: 300 }}
-      >
+      <div className="font-bold bg-gray-100 px-2 py-1 text-sm rounded" title={data.label}>
+        {data.label}
+      </div>
+      <div className="mt-2 flex flex-col gap-y-1">
         {relations.map((rel) => (
           <div
             key={`${rel.type}-${rel.id}`}
-            className="flex items-center gap-1.5 px-2 py-1 hover:bg-blue-100 cursor-pointer rounded transition-colors"
+            className="flex items-center px-2 py-1 hover:bg-blue-100 cursor-pointer rounded transition-colors"
             onClick={() => data.onRelationClick?.(id, rel)}
+            title={rel.name}
           >
-            <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{rel.name}</span>
-            {rel.years && <span className="text-gray-500 flex-none">{rel.years}</span>}
-            <span className="flex-none">{roleEmojis(rel.roles)}</span>
+            <div className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+              <span className="font-medium">{rel.name}</span>
+              {roleEmojis(rel.roles) && (
+                <span className="ml-1 whitespace-nowrap">{roleEmojis(rel.roles)}</span>
+              )}
+            </div>
+            {rel.years && (
+              <span className="flex-none text-xs text-gray-500 text-right ml-2 whitespace-nowrap">
+                {rel.years}
+              </span>
+            )}
           </div>
         ))}
       </div>
