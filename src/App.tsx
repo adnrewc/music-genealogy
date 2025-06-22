@@ -27,6 +27,18 @@ function FlowApp() {
   const { fitView } = useReactFlow()
   const loadArtistRef = useRef<((mbid: string, parent?: string) => void) | null>(null)
 
+  const handleCloseNode = useCallback((nodeId: string) => {
+    let updated: Node[] = []
+    setNodes((ns) => {
+      updated = ns.filter((n) => n.id !== nodeId)
+      return updated
+    })
+    const remaining = new Set(updated.map((n) => n.id))
+    setEdges((es) => es.filter((e) => remaining.has(e.source) && remaining.has(e.target)))
+    loaded.current.delete(nodeId)
+    childCount.current.delete(nodeId)
+  }, [])
+
   const handleRelationClick = useCallback(
     (parentId: string, rel: RelationDisplay) => {
       loadArtistRef.current?.(rel.id, parentId)
@@ -71,14 +83,22 @@ function FlowApp() {
           ...ns,
           {
             id,
-            data: { id, label, type, tooltip, relations, onRelationClick: handleRelationClick },
+            data: {
+              id,
+              label,
+              type,
+              tooltip,
+              relations,
+              onRelationClick: handleRelationClick,
+              onClose: handleCloseNode,
+            },
             position,
             type: 'graphNode',
           },
         ]
       })
     },
-    [handleRelationClick]
+    [handleRelationClick, handleCloseNode]
   )
 
   const addEdge = useCallback(
